@@ -10,6 +10,11 @@
 #   "json_claude_code"  -> parsea el sobre JSON de `claude -p --output-format json`
 #   "archivo"           -> el agente escribe su respuesta en un archivo aparte;
 #                           use el placeholder {archivo_salida} en el comando
+#
+# OJO con --max-budget-usd de Claude Code: solo limita el gasto de llamadas por
+# clave de API. Si su sesión usa un login por suscripción (Pro/Max), esa bandera
+# no limita el consumo de la cuota de la suscripción — eso lo acota el tope diario
+# de ejecuciones (BUZON_DISPATCH_MAX_RUNS) y los límites propios de su plan.
 
 [agentes.claude]
 comando = [
