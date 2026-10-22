@@ -1,0 +1,53 @@
+# Copie este archivo a ~/.config/buzon-agentes/agentes.toml (o apunte
+# BUZON_AGENTES_CONFIG a su propia copia) y ajuste los comandos a su instalación.
+#
+# Cada [agentes.<nombre>] debe coincidir con un nombre registrado con
+# `buzon agent add <nombre> --receptor <nombre>`. El comando es una lista de
+# argumentos (no una cadena de shell); el prompt se le pasa por stdin.
+#
+# formato:
+#   "texto"            -> la salida estándar completa es la respuesta (por omisión)
+#   "json_claude_code"  -> parsea el sobre JSON de `claude -p --output-format json`
+#   "archivo"           -> el agente escribe su respuesta en un archivo aparte;
+#                           use el placeholder {archivo_salida} en el comando
+
+[agentes.claude]
+comando = [
+  "claude", "-p", "--setting-sources", "", "--strict-mcp-config",
+  "--model", "haiku", "--effort", "low", "--max-budget-usd", "0.05",
+  "--tools", "Read,Glob,Grep", "--permission-mode", "dontAsk",
+  "--permission-prompts", "none", "--output-format", "json",
+  "--no-session-persistence",
+]
+formato = "json_claude_code"
+# Para escritura acotada (requiere FR-017..024 / el modulo de escrituras):
+comando_escritura = [
+  "claude", "-p", "--setting-sources", "", "--strict-mcp-config",
+  "--model", "haiku", "--effort", "low", "--max-budget-usd", "0.20",
+  "--tools", "Read,Glob,Grep,Edit,Write", "--permission-mode", "acceptEdits",
+  "--permission-prompts", "none", "--output-format", "json",
+  "--no-session-persistence",
+]
+
+[agentes.codex]
+comando = [
+  "codex", "exec", "--ephemeral", "--sandbox", "read-only",
+  "--cd", "{workdir}", "--skip-git-repo-check",
+  "-c", "model_reasoning_effort=low",
+  "--output-last-message", "{archivo_salida}", "-",
+]
+formato = "archivo"
+comando_escritura = [
+  "codex", "exec", "--ephemeral", "--sandbox", "workspace-write",
+  "--cd", "{workdir}", "--skip-git-repo-check",
+  "-c", "model_reasoning_effort=low",
+  "--output-last-message", "{archivo_salida}", "-",
+]
+
+# Quién revisa a quién antes de un push. Es un par dirigido: "claude" lo revisa
+# "codex" y viceversa. Si solo tiene un agente, deje esta sección vacía — sin un
+# par configurado, el modo de escritura se rechaza (nadie puede aprobar su propio
+# commit, por diseño).
+[revision.pares]
+claude = "codex"
+codex = "claude"
