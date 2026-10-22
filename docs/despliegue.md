@@ -9,6 +9,10 @@ ya tiene. Dos ejemplos.
 * * * * * cd /ruta/a/buzon-agentes/buzon_agentes && BUZON_AGENTES_CONFIG=~/.config/buzon-agentes/agentes.toml python3 despachador.py once >> /var/log/buzon-agentes.log 2>&1
 ```
 
+`despachador.py` solo acepta dos comandos: `once` (procesa un mensaje pendiente
+y sale) y `status` (imprime un JSON con el conteo de despachos por estado, para
+monitoreo — no gasta ninguna ejecución del tope diario).
+
 `despachador.py once` toma un `flock` no bloqueante sobre su propio directorio
 de estado, así que ejecutarlo cada minuto (o más seguido, desde un temporizador
 systemd) es seguro: si la corrida anterior sigue viva, la nueva simplemente no

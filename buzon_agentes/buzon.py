@@ -120,10 +120,9 @@ def initialize(db):
     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS tarea_abierta ON messages(task_key) "
                "WHERE task_key IS NOT NULL AND ack_at IS NULL")
     # Retirar es el emisor desdiciendose de lo que escribio, antes de que el otro lo
-    # haya tratado. Faltaba, y se noto: el aviso #177 quedo en la bandeja de codex
-    # diciendo algo que yo mismo corregi en el #178, entre diez pendientes. Un mensaje
-    # superado que sigue pendiente es una invitacion a trabajar de mas o a contestar lo
-    # que no corresponde. No se borra: queda con su motivo y se ve con --all.
+    # haya tratado. Un aviso superado que sigue pendiente, entre varios mas, es una
+    # invitacion a trabajar de mas o a contestar lo que ya no corresponde. No se
+    # borra: queda con su motivo y se ve con --all.
     # Va en initialize y no en migrate: `migrate` se va temprano cuando la base ya esta
     # al dia, asi que una base NUEVA nunca habria recibido estas columnas. Y debajo del
     # CREATE TABLE, porque un ALTER sin tabla rompe el buzon entero.
@@ -370,8 +369,7 @@ def sesion_dormida(destinatario, auto):
     es durable a proposito. Pero quien escribe tiene que saber que del otro lado puede
     no haber nadie, porque con --auto el receptor de solo lectura responde y con un
     pedido que exige editar o revisar un PR NO hay quien lo atienda: el trabajo se queda
-    parado en silencio y el que pregunto se enters horas despues. Me paso hoy tres
-    veces con el mismo pedido de revision.
+    parado en silencio y el que pregunto se entera horas despues.
     """
     if auto or destinatario["kind"] != "interactiva":
         return ""
@@ -404,7 +402,7 @@ def cola_sin_cuota(db, destinatario, auto):
     if not auto:
         return ""
     try:
-        despachador = runpy.run_path(str(Path(__file__).resolve().with_name("agent-dispatch")))
+        despachador = runpy.run_path(str(Path(__file__).resolve().with_name("despachador.py")))
         tope = despachador["_tope_diario"]()
     except Exception:
         return ""
@@ -494,10 +492,9 @@ def insert(db, sender, recipient, body, reply_to=None, auto=False, origin="inter
         # intercambio tiene que quedar puesta aunque escriba otro programa.
         if auto:
             # UN turno por omision, no dos. Con dos, la respuesta automatica dispara
-            # otro turno automatico, y eso es como empezo la cadena de los mensajes
-            # #59 al #81: veinte mensajes entre dos receptores que se contestaban
-            # solos y se comieron la cuota del dia. Quien quiera ida y vuelta la pide
-            # con --turnos 2 y sabe lo que esta pidiendo.
+            # otro turno automatico, y una cadena de ida y vuelta entre dos receptores
+            # automaticos puede comerse la cuota del dia sola. Quien quiera ida y
+            # vuelta la pide con --turnos 2 y sabe lo que esta pidiendo.
             db.execute(
                 "INSERT INTO dispatches(message_id, turns_left, state) VALUES (?, ?, 'pending')",
                 (cur.lastrowid, turnos),
@@ -622,7 +619,12 @@ def normalize_repo(repo):
 
 def normalize_path(raw):
     """Repo-relative, normalized. '.' means the whole repository."""
-    text = str(raw).strip().replace("\\", "/").strip("/")
+    original = str(raw).strip().replace("\\", "/")
+    # El chequeo de ruta absoluta va ANTES de quitar la barra inicial: hacerlo
+    # despues deja pasar '/etc/passwd' como si fuera el relativo 'etc/passwd'.
+    if original.startswith("/"):
+        raise ValueError(f"path must stay inside the repository: {raw!r}")
+    text = original.strip("/")
     cleaned = os.path.normpath(text) if text else "."
     if cleaned == "." or cleaned == "":
         return "."

@@ -66,6 +66,13 @@ class BuzonTest(unittest.TestCase):
                              "--path", "src/server.js", check=False)
         self.assertEqual(choque.returncode, 3)
 
+    def test_arriendo_rechaza_ruta_absoluta(self):
+        self.registrar("alfa")
+        resultado = self.correr("lease", "take", "alfa", "--repo", "/tmp/repo-prueba",
+                                "--path", "/etc/passwd", check=False)
+        self.assertNotEqual(resultado.returncode, 0)
+        self.assertIn("stay inside", resultado.stderr)
+
     def test_registro_vacio_no_trae_agentes_de_fabrica(self):
         listado = json.loads(self.correr("agent", "list", "--json").stdout)
         self.assertEqual(listado, [])

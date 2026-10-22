@@ -9,14 +9,9 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 import tempfile
+import tomllib
 from pathlib import Path
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover - solo en interpretes viejos
-    import tomli as tomllib  # type: ignore[no-redef]
 
 
 class ConfiguracionInvalida(RuntimeError):
@@ -60,6 +55,11 @@ def _validar(datos, ruta):
             )
     revisores = datos.get("revision", {}).get("pares", {})
     for quien, revisa in revisores.items():
+        if quien == revisa:
+            raise ConfiguracionInvalida(
+                f"{ruta}: revision.pares declara {quien!r}->{revisa!r}: un agente no "
+                "puede ser su propio revisor"
+            )
         if quien not in agentes or revisa not in agentes:
             raise ConfiguracionInvalida(
                 f"{ruta}: revision.pares declara {quien!r}->{revisa!r} con un nombre no "

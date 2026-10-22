@@ -35,7 +35,8 @@ revise el commit antes de que se integre.** Nadie aprueba su propio código.
 
 No depende de ningún proveedor de LLM adicional ni de infraestructura en la nube:
 corre en la máquina donde ya viven los agentes, con los mismos binarios y
-credenciales que usarías desde la terminal.
+credenciales que usarías desde la terminal. Requiere **Python 3.11 o superior**
+(usa `tomllib` de la librería estándar); sin eso, nada más que instalar.
 
 ## Por qué existe
 

@@ -133,11 +133,7 @@ def run_agente(nombre, prompt, workdir=None):
 
 
 class PermanentError(RuntimeError):
-    """Lo que no va a funcionar por reintentar: no hay que gastar cuota en ello.
-
-    Declarada aca (y de nuevo mas abajo, donde vivia antes) para que `GuardaViolada`
-    la pueda extender sin reordenar el resto del archivo.
-    """
+    """Lo que no va a funcionar por reintentar: no hay que gastar cuota en ello."""
 
 
 # --- Escritura con revision cruzada (FR-017 a FR-024) -----------------------------
@@ -335,7 +331,10 @@ def manejar_escritura(db, message):
     checkout = root / ("tarea-" + str(message["id"]))
     if checkout.exists():
         raise PermanentError(f"checkout ya existe; inspeccionar {checkout}")
-    reviewer = revisor_de(CONFIG, message["receiver"])
+    # Por nombre de agente (recipient), no por su receptor/adaptador: `[revision.pares]`
+    # se declara por agente, y pedir_revision() mas abajo calcula el mismo revisor con
+    # la misma clave — deben coincidir o la columna `reviewer` queda desincronizada.
+    reviewer = revisor_de(CONFIG, message["recipient"])
     if reviewer is None:
         raise PermanentError("receptor de escritura no soportado")
     with db:
@@ -353,7 +352,12 @@ def manejar_escritura(db, message):
     if after == before and git(checkout, "status", "--porcelain", "--untracked-files=all"):
         validar_archivos_pendientes(checkout)
         git(checkout, "add", "-A")
-        git(checkout, "-c", "user.name=buzon-agentes", "-c", "user.email=buzon-agentes@localhost",
+        # core.hooksPath=/dev/null: el agente de escritura pudo haber dejado un hook
+        # (p. ej. .git/hooks/pre-commit) en el checkout; git no lo rastrea como
+        # archivo del repo, asi que ninguna guarda de archivos lo detecta, pero SI
+        # correria con los privilegios de ESTE proceso al hacer commit nosotros.
+        git(checkout, "-c", "core.hooksPath=/dev/null",
+            "-c", "user.name=buzon-agentes", "-c", "user.email=buzon-agentes@localhost",
             "commit", "-m", f"Tarea automatica {message['id']}")
         after = git(checkout, "rev-parse", "HEAD^{commit}")
     if git(checkout, "rev-parse", "HEAD^", check=False) != before:
@@ -366,12 +370,17 @@ def manejar_escritura(db, message):
 
 
 def procesar_revision(db, message, answer):
+    """Devuelve True si `message` era una revisión y ya se avisó al escritor.
+
+    `finish()` se apoya en ese valor para no mandar una segunda notificación
+    genérica detrás de esta: una revisión real nunca debe producir dos mensajes
+    por una sola respuesta.
+    """
     fila = db.execute("SELECT * FROM escrituras WHERE review_message_id = ? AND estado = 'esperando_revision'",
                       (message["id"],)).fetchone()
     if fila is None:
-        return
+        return False
     # 'cambios_pedidos' tambien representa respuesta ambigua: nunca se aprueba por prefijo.
-    import re
     aprobado = bool(re.match(r"^APROBADO(?:\s|[.,:;]|$)", answer.strip(), re.IGNORECASE))
     motivo = ""
     try:
@@ -387,6 +396,7 @@ def procesar_revision(db, message, answer):
     MAIL["registrar_respuesta"](db, message["recipient"], message["sender"],
         f"Revision {estado}: commit {fila['commit_sha']} en {fila['repo']}.{motivo} {answer.strip()[:1000]}",
         reply_to=message["id"], origin="automatica")
+    return True
 
 
 def finish(db, message, answer):
@@ -396,13 +406,12 @@ def finish(db, message, answer):
     with db:
         original = db.execute("SELECT ack_at FROM messages WHERE id = ?", (message["id"],)).fetchone()
         if original["ack_at"] is None:
-            procesar_revision(db, message, answer)
-            if answer != NO_REPLY:
+            ya_notificado = procesar_revision(db, message, answer)
+            if not ya_notificado and answer != NO_REPLY:
                 # El INSERT se delega en el buzon para que la respuesta salga MARCADA
                 # como automatica. Con un INSERT propio el origen tomaba el valor por
                 # omision y una respuesta sin persona detras se leia como el criterio
-                # del agente: paso en los mensajes #59 a #81, con una revision de
-                # codigo incluida. No volver a un INSERT local.
+                # del agente. No volver a un INSERT local.
                 prefix = f"[Respuesta automática de {message['recipient']}; instancia separada]\n"
                 answer = prefix + answer[:MAX_BODY - len(prefix)]
                 MAIL["registrar_respuesta"](
